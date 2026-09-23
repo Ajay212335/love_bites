@@ -3,22 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Automatically detect backend host IP from Expo dev server hostUri
-function getApiBaseUrl(): string {
-  const hostUri =
-    Constants.expoConfig?.hostUri ||
-    (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
-    (Constants as any).manifest?.debuggerHost;
+// Production Render backend endpoint
+export const PRODUCTION_API_URL = 'https://love-bites.onrender.com/api';
 
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-      return `http://${ip}:5001/api`;
-    }
+// Resolve backend API URL (Default to deployed Render cloud backend)
+function getApiBaseUrl(): string {
+  // Allow explicit override via environment variable if provided
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  const defaultHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-  return `http://${defaultHost}:5001/api`;
+  // Deployed Render Cloud API
+  return PRODUCTION_API_URL;
 }
 
 export const API_BASE_URL = getApiBaseUrl();
