@@ -56,6 +56,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getNotificationLogs(),
       ]);
 
+      const todayDateStr = new Date().toISOString().split('T')[0];
       let currentTasks: DailyTask[] = [];
 
       if (stored) {
@@ -68,8 +69,20 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
               (t.id.startsWith('task_') && !isNaN(Number(t.id.replace('task_', '')))
                 ? new Date(Number(t.id.replace('task_', ''))).toISOString()
                 : new Date().toISOString());
-            const date = t.date || created.split('T')[0];
-            return { ...t, createdAt: created, date };
+            
+            const lastCompletedDate = t.completedAt
+              ? new Date(t.completedAt).toISOString().split('T')[0]
+              : t.date || null;
+            const isCompletedToday = t.isCompleted && lastCompletedDate === todayDateStr;
+
+            return {
+              ...t,
+              createdAt: created,
+              isCompleted: isCompletedToday,
+              photoUrl: isCompletedToday ? t.photoUrl : undefined,
+              lastPhotoUrl: t.photoUrl || t.lastPhotoUrl,
+              date: todayDateStr,
+            };
           });
         setTasks(currentTasks);
       }
@@ -80,28 +93,35 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (user?.id) {
         const dbRes = await api.getTasks(user.id);
         if (dbRes && dbRes.success && Array.isArray(dbRes.tasks)) {
-          const remoteTasks: DailyTask[] = dbRes.tasks.map((t: any) => ({
-            id: t.id || t._id,
-            title: t.title,
-            description: t.description,
-            time: t.time,
-            hour: t.hour,
-            minute: t.minute,
-            category: t.category,
-            assignedTo: t.assignedTo,
-            creatorId: t.creatorId,
-            creatorName: t.creatorName,
-            isCompleted: !!t.isCompleted,
-            completedAt:
-              t.completedAt ||
-              (t.photoUrl ? (t.updatedAt || t.createdAt || new Date().toISOString()) : undefined),
-            completedByName: t.completedByName || t.attachedByName || (t.isCompleted ? 'Partner' : undefined),
-            photoUrl: t.photoUrl,
-            attachedByName: t.attachedByName || t.completedByName,
-            date: t.date || (t.createdAt ? t.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]),
-            createdAt: t.createdAt,
-            streakCount: t.streakCount || 1,
-          }));
+          const remoteTasks: DailyTask[] = dbRes.tasks.map((t: any) => {
+            const lastCompletedDate = t.completedAt
+              ? new Date(t.completedAt).toISOString().split('T')[0]
+              : t.date || null;
+            const isCompletedToday = t.isCompleted && lastCompletedDate === todayDateStr;
+
+            return {
+              id: t.id || t._id,
+              title: t.title,
+              description: t.description,
+              time: t.time,
+              hour: t.hour,
+              minute: t.minute,
+              category: t.category,
+              assignedTo: t.assignedTo,
+              creatorId: t.creatorId,
+              creatorName: t.creatorName,
+              isCompleted: isCompletedToday,
+              completedAt: t.completedAt,
+              completedByName: t.completedByName || t.attachedByName || (t.isCompleted ? 'Partner' : undefined),
+              photoUrl: isCompletedToday ? t.photoUrl : undefined,
+              lastPhotoUrl: t.lastPhotoUrl || t.photoUrl,
+              attachedByName: t.attachedByName || t.completedByName,
+              date: todayDateStr,
+              createdAt: t.createdAt,
+              streakCount: t.streakCount || 1,
+              history: t.history || [],
+            };
+          });
 
           setTasks(remoteTasks);
           await AsyncStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(remoteTasks));

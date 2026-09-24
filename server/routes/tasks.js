@@ -6,7 +6,7 @@ const User = require('../models/User');
 
 /**
  * @route GET /api/tasks
- * @desc Get all tasks for user and their linked partner
+ * @desc Get all recurring tasks for user and their linked partner
  */
 router.get('/', async (req, res) => {
   try {
@@ -35,13 +35,34 @@ router.get('/', async (req, res) => {
     const tasks = await Task.find({
       $or: [
         { creatorId: { $in: creatorIds } },
-        { creatorId: userId }
-      ]
+        { creatorId: userId },
+      ],
     }).sort({ hour: 1, minute: 1 });
+
+    const todayDateStr = new Date().toISOString().split('T')[0];
+
+    // Format tasks for today's recurring state
+    const formattedTasks = tasks.map((t) => {
+      const taskObj = t.toJSON();
+      const lastCompletedDate = taskObj.completedAt
+        ? new Date(taskObj.completedAt).toISOString().split('T')[0]
+        : taskObj.date || null;
+
+      // Completed today vs completed on prior day (recurring daily ritual)
+      const isCompletedToday = taskObj.isCompleted && lastCompletedDate === todayDateStr;
+
+      return {
+        ...taskObj,
+        isCompleted: isCompletedToday,
+        photoUrl: isCompletedToday ? taskObj.photoUrl : null,
+        lastPhotoUrl: taskObj.photoUrl || taskObj.lastPhotoUrl,
+        date: todayDateStr,
+      };
+    });
 
     return res.json({
       success: true,
-      tasks: tasks.map((t) => t.toJSON()),
+      tasks: formattedTasks,
     });
   } catch (error) {
     console.error('get tasks error:', error);
@@ -51,7 +72,7 @@ router.get('/', async (req, res) => {
 
 /**
  * @route POST /api/tasks
- * @desc Create new daily task
+ * @desc Create new daily recurring task
  */
 router.post('/', async (req, res) => {
   try {
@@ -94,9 +115,20 @@ router.post('/', async (req, res) => {
       creatorId: user ? user._id : creatorId,
       creatorName: user ? user.name : (attachedByName || 'You'),
       photoUrl: photoUrl || null,
+      lastPhotoUrl: photoUrl || null,
       attachedByName: attachedByName || null,
       date: todayDate,
       streakCount: 1,
+      history: photoUrl
+        ? [
+            {
+              date: todayDate,
+              photoUrl,
+              completedByName: attachedByName || 'You',
+              completedAt: new Date(),
+            },
+          ]
+        : [],
     });
 
     return res.json({
@@ -122,7 +154,7 @@ async function findTaskById(id) {
 
 /**
  * @route PUT /api/tasks/:id/complete-with-photo
- * @desc Complete task with attached photo proof in DB
+ * @desc Complete task with attached photo proof for today in DB
  */
 router.put('/:id/complete-with-photo', async (req, res) => {
   try {
@@ -135,12 +167,24 @@ router.put('/:id/complete-with-photo', async (req, res) => {
     }
 
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
     task.isCompleted = true;
     task.photoUrl = photoUrl || task.photoUrl;
+    task.lastPhotoUrl = photoUrl || task.photoUrl;
     task.attachedByName = userName || 'Partner';
     task.completedAt = now;
     task.completedByName = userName || 'Partner';
+    task.date = todayStr;
     task.streakCount = (task.streakCount || 0) + 1;
+
+    if (!task.history) task.history = [];
+    task.history.push({
+      date: todayStr,
+      photoUrl: photoUrl || task.photoUrl,
+      completedByName: userName || 'Partner',
+      completedAt: now,
+    });
 
     await task.save();
 
@@ -168,10 +212,24 @@ router.post('/:id/photo', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
     task.photoUrl = photoUrl;
+    task.lastPhotoUrl = photoUrl;
     task.attachedByName = userName || 'Partner';
-    task.completedAt = task.completedAt || new Date();
+    task.completedAt = task.completedAt || now;
     task.completedByName = task.completedByName || userName || 'Partner';
+    task.date = todayStr;
+
+    if (!task.history) task.history = [];
+    task.history.push({
+      date: todayStr,
+      photoUrl,
+      completedByName: userName || 'Partner',
+      completedAt: now,
+    });
+
     await task.save();
 
     return res.json({
@@ -186,7 +244,7 @@ router.post('/:id/photo', async (req, res) => {
 
 /**
  * @route PUT /api/tasks/:id/toggle
- * @desc Toggle task completion
+ * @desc Toggle task completion for today
  */
 router.put('/:id/toggle', async (req, res) => {
   try {
@@ -198,9 +256,13 @@ router.put('/:id/toggle', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
     task.isCompleted = !task.isCompleted;
-    task.completedAt = task.isCompleted ? new Date() : null;
+    task.completedAt = task.isCompleted ? now : null;
     task.completedByName = task.isCompleted ? (userName || 'You') : null;
+    task.date = todayStr;
     if (task.isCompleted) {
       task.streakCount = (task.streakCount || 0) + 1;
     }
@@ -249,7 +311,7 @@ router.post('/:id/nudge', async (req, res) => {
 
 /**
  * @route DELETE /api/tasks/:id
- * @desc Delete task
+ * @desc Delete recurring task permanently
  */
 router.delete('/:id', async (req, res) => {
   try {
@@ -259,7 +321,7 @@ router.delete('/:id', async (req, res) => {
     } else {
       await Task.deleteOne({ _id: id });
     }
-    return res.json({ success: true, message: 'Task deleted' });
+    return res.json({ success: true, message: 'Task deleted permanently' });
   } catch (error) {
     console.error('delete task error:', error);
     return res.status(500).json({ success: false, error: 'Failed to delete task' });

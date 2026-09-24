@@ -73,6 +73,18 @@ const taskSchema = new mongoose.Schema(
       type: Number,
       default: 1,
     },
+    lastPhotoUrl: {
+      type: String,
+      default: null,
+    },
+    history: [
+      {
+        date: { type: String },
+        photoUrl: { type: String },
+        completedByName: { type: String },
+        completedAt: { type: Date },
+      },
+    ],
   },
   {
     collection: 'task',

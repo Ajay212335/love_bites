@@ -54,6 +54,13 @@ export interface DailyTask {
   lastNudgedAt?: string;
   notificationId?: string;
   streakCount?: number;
+  lastPhotoUrl?: string;
+  history?: Array<{
+    date: string;
+    photoUrl?: string;
+    completedByName?: string;
+    completedAt?: string;
+  }>;
 }
 
 export interface NotificationLog {
