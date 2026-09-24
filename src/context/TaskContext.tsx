@@ -268,23 +268,29 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Persist to remote MongoDB Database if online
     if (user?.id) {
-      api.createTask({
-        title: newTask.title,
-        description: newTask.description,
-        photoUrl: newTask.photoUrl,
-        attachedByName: newTask.attachedByName,
-        time: newTask.time,
-        hour: newTask.hour,
-        minute: newTask.minute,
-        category: newTask.category,
-        assignedTo: newTask.assignedTo,
-        creatorId: user.id,
-        date: newTask.date,
-      }).then((res) => {
-        if (res?.success && res?.task?.id) {
-          newTask.id = res.task.id;
+      try {
+        const res = await api.createTask({
+          title: newTask.title,
+          description: newTask.description,
+          photoUrl: newTask.photoUrl,
+          attachedByName: newTask.attachedByName,
+          time: newTask.time,
+          hour: newTask.hour,
+          minute: newTask.minute,
+          category: newTask.category,
+          assignedTo: newTask.assignedTo,
+          creatorId: user.id,
+          creatorEmail: user.email,
+          partnerId: partner?.id || user.partnerId,
+          partnerEmail: partner?.email || user.partnerEmail,
+          date: newTask.date,
+        });
+        if (res?.success && (res?.task?.id || res?.task?._id)) {
+          newTask.id = res.task.id || res.task._id;
         }
-      }).catch((e) => console.warn('Cloud DB create task err:', e?.message));
+      } catch (e: any) {
+        console.warn('Cloud DB create task err:', e?.message);
+      }
     }
 
     const updated = [newTask, ...tasks];

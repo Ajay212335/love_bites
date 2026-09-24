@@ -41,6 +41,18 @@ const taskSchema = new mongoose.Schema(
       type: String,
       default: 'You',
     },
+    creatorEmail: {
+      type: String,
+      default: null,
+    },
+    partnerId: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    partnerEmail: {
+      type: String,
+      default: null,
+    },
     isCompleted: {
       type: Boolean,
       default: false,

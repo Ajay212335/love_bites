@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'userId query parameter is required' });
     }
 
-    let creatorIds = [userId];
+    const identifiers = new Set([String(userId).trim()]);
     let user = null;
 
     if (mongoose.Types.ObjectId.isValid(userId)) {
@@ -26,16 +26,39 @@ router.get('/', async (req, res) => {
     }
 
     if (user) {
-      creatorIds = [user._id.toString()];
-      if (user.partnerId) {
-        creatorIds.push(user.partnerId.toString());
+      identifiers.add(user._id.toString());
+      if (user.email) identifiers.add(user.email.toLowerCase());
+
+      // 1. Direct partner link on user object
+      if (user.partnerId) identifiers.add(user.partnerId.toString());
+      if (user.partnerEmail) identifiers.add(user.partnerEmail.toLowerCase());
+
+      // 2. Bidirectional partner link (find partner account that links to this user)
+      const partnerDoc = await User.findOne({
+        $or: [
+          { partnerId: user._id },
+          { partnerEmail: user.email },
+          ...(user.partnerId ? [{ _id: user.partnerId }] : []),
+          ...(user.partnerEmail ? [{ email: user.partnerEmail }] : []),
+        ],
+      });
+
+      if (partnerDoc) {
+        identifiers.add(partnerDoc._id.toString());
+        if (partnerDoc.email) identifiers.add(partnerDoc.email.toLowerCase());
+        if (partnerDoc.partnerId) identifiers.add(partnerDoc.partnerId.toString());
+        if (partnerDoc.partnerEmail) identifiers.add(partnerDoc.partnerEmail.toLowerCase());
       }
     }
 
+    const idList = Array.from(identifiers);
+
     const tasks = await Task.find({
       $or: [
-        { creatorId: { $in: creatorIds } },
-        { creatorId: userId },
+        { creatorId: { $in: idList } },
+        { partnerId: { $in: idList } },
+        { creatorEmail: { $in: idList } },
+        { partnerEmail: { $in: idList } },
       ],
     }).sort({ hour: 1, minute: 1 });
 
@@ -85,6 +108,9 @@ router.post('/', async (req, res) => {
       category,
       assignedTo,
       creatorId,
+      creatorEmail,
+      partnerId,
+      partnerEmail,
       photoUrl,
       attachedByName,
       date,
@@ -102,6 +128,12 @@ router.post('/', async (req, res) => {
       user = await User.findOne({ email: String(creatorId).trim().toLowerCase() });
     }
 
+    const resolvedCreatorId = user ? user._id.toString() : creatorId;
+    const resolvedCreatorName = user ? user.name : (attachedByName || 'You');
+    const resolvedCreatorEmail = user?.email || (creatorEmail ? creatorEmail.trim().toLowerCase() : null);
+    const resolvedPartnerId = user?.partnerId ? user.partnerId.toString() : (partnerId || null);
+    const resolvedPartnerEmail = user?.partnerEmail ? user.partnerEmail.toLowerCase() : (partnerEmail ? partnerEmail.trim().toLowerCase() : null);
+
     const todayDate = date || new Date().toISOString().split('T')[0];
 
     const task = await Task.create({
@@ -112,8 +144,11 @@ router.post('/', async (req, res) => {
       minute,
       category: category || 'romance',
       assignedTo: assignedTo || 'both',
-      creatorId: user ? user._id : creatorId,
-      creatorName: user ? user.name : (attachedByName || 'You'),
+      creatorId: resolvedCreatorId,
+      creatorName: resolvedCreatorName,
+      creatorEmail: resolvedCreatorEmail,
+      partnerId: resolvedPartnerId,
+      partnerEmail: resolvedPartnerEmail,
       photoUrl: photoUrl || null,
       lastPhotoUrl: photoUrl || null,
       attachedByName: attachedByName || null,
