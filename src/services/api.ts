@@ -191,11 +191,41 @@ async function fallbackLinkPartner(
   };
 }
 
+/**
+ * Robust fetch helper with timeout and automatic retry on Render cold-starts or connection resets
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  retries = 2,
+  delayMs = 1200
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (retries > 0) {
+      console.log(`🔄 [API Auto-Retry] Endpoint connecting / retrying in ${delayMs}ms... (${retries} attempts left)`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return fetchWithRetry(url, options, retries - 1, delayMs * 1.5);
+    }
+    throw error;
+  }
+}
+
 // Unified API Client
 export const api = {
   async sendOtp(name: string, email: string, password?: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
@@ -211,7 +241,7 @@ export const api = {
 
   async verifyOtpSignup(email: string, otp: string, name?: string, password?: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/verify-otp-signup`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/auth/verify-otp-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp, name, password }),
@@ -227,7 +257,7 @@ export const api = {
 
   async login(email: string, password?: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -248,7 +278,7 @@ export const api = {
     partnerName?: string
   ) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/partner/link`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/auth/partner/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentUserId, partnerEmail, partnerPassword, partnerName }),
@@ -264,7 +294,7 @@ export const api = {
 
   async updatePushToken(userId: string, pushToken?: string, fcmToken?: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/update-push-token`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/auth/update-push-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, pushToken, fcmToken }),
@@ -278,7 +308,7 @@ export const api = {
 
   async sendPartnerPushNudge(currentUserId: string, partnerId: string, taskTitle: string, taskTime: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/push/nudge`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/auth/push/nudge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentUserId, partnerId, taskTitle, taskTime }),
@@ -293,7 +323,7 @@ export const api = {
   // Task Database Endpoints
   async getTasks(userId: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/tasks?userId=${encodeURIComponent(userId)}`);
+      const res = await fetchWithRetry(`${API_BASE_URL}/tasks?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch tasks');
       return data;
@@ -305,7 +335,7 @@ export const api = {
 
   async createTask(taskData: any) {
     try {
-      const res = await fetch(`${API_BASE_URL}/tasks`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskData),
@@ -321,7 +351,7 @@ export const api = {
 
   async completeTaskWithPhoto(taskId: string, photoUrl: string, userName: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/tasks/${taskId}/complete-with-photo`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/tasks/${taskId}/complete-with-photo`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoUrl, userName }),
@@ -337,7 +367,7 @@ export const api = {
 
   async attachTaskPhoto(taskId: string, photoUrl: string, userName: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/tasks/${taskId}/photo`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/tasks/${taskId}/photo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoUrl, userName }),
@@ -353,7 +383,7 @@ export const api = {
 
   async toggleTask(taskId: string, userName: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/tasks/${taskId}/toggle`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/tasks/${taskId}/toggle`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userName }),
@@ -369,7 +399,7 @@ export const api = {
 
   async deleteTask(taskId: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/tasks/${taskId}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -384,7 +414,7 @@ export const api = {
   // === SPECIAL DATES API (Remote MongoDB & Local DB Sync) ===
   async getSpecialDates(userId?: string) {
     try {
-      const res = await fetch(
+      const res = await fetchWithRetry(
         `${API_BASE_URL}/special-dates${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`
       );
       if (!res.ok) {
@@ -403,7 +433,7 @@ export const api = {
 
   async createSpecialDate(dateData: any) {
     try {
-      const res = await fetch(`${API_BASE_URL}/special-dates`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/special-dates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dateData),
@@ -424,7 +454,7 @@ export const api = {
 
   async deleteSpecialDate(dateId: string) {
     try {
-      const res = await fetch(`${API_BASE_URL}/special-dates/${dateId}`, {
+      const res = await fetchWithRetry(`${API_BASE_URL}/special-dates/${dateId}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
