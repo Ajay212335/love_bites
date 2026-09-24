@@ -95,10 +95,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.85,
+        quality: 0.6,
+        base64: true,
       });
       if (!res.canceled && res.assets && res.assets[0]) {
-        setSelectedPhotoUri(res.assets[0].uri);
+        const photo = res.assets[0].base64
+          ? `data:image/jpeg;base64,${res.assets[0].base64}`
+          : res.assets[0].uri;
+        setSelectedPhotoUri(photo);
       }
     } catch (e: any) {
       showAlert('Error', e?.message || 'Could not pick image', 'error');
@@ -115,10 +119,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
       const res = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.85,
+        quality: 0.6,
+        base64: true,
       });
       if (!res.canceled && res.assets && res.assets[0]) {
-        setSelectedPhotoUri(res.assets[0].uri);
+        const photo = res.assets[0].base64
+          ? `data:image/jpeg;base64,${res.assets[0].base64}`
+          : res.assets[0].uri;
+        setSelectedPhotoUri(photo);
       }
     } catch (e: any) {
       showAlert('Error', e?.message || 'Could not take photo', 'error');
@@ -306,7 +314,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
 
           {/* Prominent Attached Moment Photo Proof Banner with Upload Time directly on the card */}
           {task.photoUrl && (
-            <View
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setPhotoModalVisible(true)}
               style={[
                 styles.cardPhotoBanner,
                 {
@@ -325,7 +335,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
                     </Text>
                   </View>
                   <Text style={[styles.cardPhotoViewHint, { color: colors.textMuted }]}>
-                    View ➔
+                    Tap to View ➔
                   </Text>
                 </View>
                 <Text style={[styles.cardPhotoUploader, { color: colors.text }]} numberOfLines={1}>
@@ -337,7 +347,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
                   </Text>
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
           )}
         </Card>
       </TouchableOpacity>
@@ -479,15 +489,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
               ) : (
                 /* Task is Pending */
                 <View style={styles.pendingSection}>
-                  {isAssignedToPartner ? (
-                    /* Assigned to Partner */
-                    <View style={[styles.partnerWaitCard, { backgroundColor: isDark ? '#1C1520' : '#FFF0F5', borderColor: 'rgba(255,32,78,0.2)' }]}>
+                  {isAssignedToPartner && (
+                    <View style={[styles.partnerWaitCard, { backgroundColor: isDark ? '#1C1520' : '#FFF0F5', borderColor: 'rgba(255,32,78,0.2)', marginBottom: Spacing.md }]}>
                       <Clock size={20} color={colors.primary} />
                       <Text style={[styles.partnerWaitTitle, { color: colors.text }]}>
                         Assigned to {partner?.name || 'Partner'}
                       </Text>
                       <Text style={[styles.partnerWaitDesc, { color: colors.textSecondary }]}>
-                        Only {partner?.name || 'your partner'} can complete this task and attach the moment photo proof.
+                        Assigned for {partner?.name || 'your partner'}, but either of you can attach the moment photo proof!
                       </Text>
 
                       <TouchableOpacity
@@ -498,84 +507,84 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
                       >
                         <Send size={15} color="#FFFFFF" />
                         <Text style={styles.modalNudgeText}>
-                          {nudging ? 'Sending...' : `Tell ${partner?.name ? partner.name.split(' ')[0] : 'Partner'}`}
+                          {nudging ? 'Sending...' : `Nudge ${partner?.name ? partner.name.split(' ')[0] : 'Partner'}`}
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  ) : (
-                    /* Assigned to Me or Both - User can complete with photo */
-                    <View style={styles.uploadSection}>
-                      <Text style={[styles.sectionHeading, { color: colors.text }]}>
-                        Attach Moment Photo to Complete:
-                      </Text>
-
-                      {selectedPhotoUri ? (
-                        <View style={[styles.pickedPhotoContainer, { borderColor: colors.border }]}>
-                          <Image source={{ uri: selectedPhotoUri }} style={styles.pickedPhoto} />
-                          <View style={[styles.photoActionsRow, { backgroundColor: colors.surfaceSubtle }]}>
-                            <TouchableOpacity
-                              onPress={handleTakePhoto}
-                              style={[styles.changeSmallBtn, { backgroundColor: colors.surfaceSubtle }]}
-                            >
-                              <Camera size={14} color={colors.primary} />
-                              <Text style={[styles.changeSmallText, { color: colors.primary }]}>Retake</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              onPress={handlePickImage}
-                              style={[styles.changeSmallBtn, { backgroundColor: colors.surfaceSubtle }]}
-                            >
-                              <ImageIcon size={14} color={colors.primary} />
-                              <Text style={[styles.changeSmallText, { color: colors.primary }]}>Gallery</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              onPress={() => setSelectedPhotoUri(null)}
-                              style={[styles.changeSmallBtn, { backgroundColor: 'rgba(255, 59, 48, 0.12)' }]}
-                            >
-                              <Trash2 size={14} color="#FF3B30" />
-                              <Text style={[styles.changeSmallText, { color: '#FF3B30' }]}>Remove</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={styles.photoButtonsGrid}>
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={handlePickImage}
-                            style={[styles.selectPhotoBtn, { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}
-                          >
-                            <ImageIcon size={22} color={colors.primary} />
-                            <Text style={[styles.selectPhotoBtnText, { color: colors.text }]}>
-                              Pick from Gallery
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={handleTakePhoto}
-                            style={[styles.selectPhotoBtn, { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}
-                          >
-                            <Camera size={22} color={colors.primary} />
-                            <Text style={[styles.selectPhotoBtnText, { color: colors.text }]}>
-                              Take Photo
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-
-                      {/* Submit & Complete Button */}
-                      <Button
-                        title="Submit & Complete Task"
-                        onPress={handleSubmitCompletion}
-                        loading={submitting}
-                        variant="primary"
-                        size="lg"
-                        icon={<Check size={18} color="#FFFFFF" />}
-                        style={styles.submitCompleteBtn}
-                      />
-                    </View>
                   )}
+
+                  {/* Photo Upload & Completion Section */}
+                  <View style={styles.uploadSection}>
+                    <Text style={[styles.sectionHeading, { color: colors.text }]}>
+                      Attach Moment Photo to Complete:
+                    </Text>
+
+                    {selectedPhotoUri ? (
+                      <View style={[styles.pickedPhotoContainer, { borderColor: colors.border }]}>
+                        <Image source={{ uri: selectedPhotoUri }} style={styles.pickedPhoto} />
+                        <View style={[styles.photoActionsRow, { backgroundColor: colors.surfaceSubtle }]}>
+                          <TouchableOpacity
+                            onPress={handleTakePhoto}
+                            style={[styles.changeSmallBtn, { backgroundColor: colors.surfaceSubtle }]}
+                          >
+                            <Camera size={14} color={colors.primary} />
+                            <Text style={[styles.changeSmallText, { color: colors.primary }]}>Retake</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={handlePickImage}
+                            style={[styles.changeSmallBtn, { backgroundColor: colors.surfaceSubtle }]}
+                          >
+                            <ImageIcon size={14} color={colors.primary} />
+                            <Text style={[styles.changeSmallText, { color: colors.primary }]}>Gallery</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => setSelectedPhotoUri(null)}
+                            style={[styles.changeSmallBtn, { backgroundColor: 'rgba(255, 59, 48, 0.12)' }]}
+                          >
+                            <Trash2 size={14} color="#FF3B30" />
+                            <Text style={[styles.changeSmallText, { color: '#FF3B30' }]}>Remove</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.photoButtonsGrid}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={handlePickImage}
+                          style={[styles.selectPhotoBtn, { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}
+                        >
+                          <ImageIcon size={22} color={colors.primary} />
+                          <Text style={[styles.selectPhotoBtnText, { color: colors.text }]}>
+                            Pick from Gallery
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={handleTakePhoto}
+                          style={[styles.selectPhotoBtn, { backgroundColor: colors.surfaceSubtle, borderColor: colors.border }]}
+                        >
+                          <Camera size={22} color={colors.primary} />
+                          <Text style={[styles.selectPhotoBtnText, { color: colors.text }]}>
+                            Take Photo
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Submit & Complete Button */}
+                    <Button
+                      title="Submit & Complete Task"
+                      onPress={handleSubmitCompletion}
+                      loading={submitting}
+                      variant="primary"
+                      size="lg"
+                      icon={<Check size={18} color="#FFFFFF" />}
+                      style={styles.submitCompleteBtn}
+                    />
+                  </View>
                 </View>
               )}
 

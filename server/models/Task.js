@@ -34,8 +34,7 @@ const taskSchema = new mongoose.Schema(
       default: 'both',
     },
     creatorId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: mongoose.Schema.Types.Mixed,
       required: true,
     },
     creatorName: {

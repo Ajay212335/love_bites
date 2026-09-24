@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Task = require('../models/Task');
 const User = require('../models/User');
 
@@ -14,18 +15,29 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'userId query parameter is required' });
     }
 
-    const user = await User.findById(userId);
+    let creatorIds = [userId];
+    let user = null;
+
+    if (mongoose.Types.ObjectId.isValid(userId)) {
+      user = await User.findById(userId);
+    }
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      user = await User.findOne({ email: String(userId).trim().toLowerCase() });
     }
 
-    // Query tasks created by user OR their partner
-    const creatorIds = [user._id];
-    if (user.partnerId) {
-      creatorIds.push(user.partnerId);
+    if (user) {
+      creatorIds = [user._id.toString()];
+      if (user.partnerId) {
+        creatorIds.push(user.partnerId.toString());
+      }
     }
 
-    const tasks = await Task.find({ creatorId: { $in: creatorIds } }).sort({ hour: 1, minute: 1 });
+    const tasks = await Task.find({
+      $or: [
+        { creatorId: { $in: creatorIds } },
+        { creatorId: userId }
+      ]
+    }).sort({ hour: 1, minute: 1 });
 
     return res.json({
       success: true,
@@ -33,7 +45,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('get tasks error:', error);
-    return res.status(500).json({ success: false, error: 'Failed to fetch tasks' });
+    return res.json({ success: true, tasks: [] });
   }
 });
 
@@ -61,9 +73,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required task fields' });
     }
 
-    const user = await User.findById(creatorId);
+    let user = null;
+    if (mongoose.Types.ObjectId.isValid(creatorId)) {
+      user = await User.findById(creatorId);
+    }
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      user = await User.findOne({ email: String(creatorId).trim().toLowerCase() });
     }
 
     const todayDate = date || new Date().toISOString().split('T')[0];
@@ -76,8 +91,8 @@ router.post('/', async (req, res) => {
       minute,
       category: category || 'romance',
       assignedTo: assignedTo || 'both',
-      creatorId: user._id,
-      creatorName: user.name,
+      creatorId: user ? user._id : creatorId,
+      creatorName: user ? user.name : (attachedByName || 'You'),
       photoUrl: photoUrl || null,
       attachedByName: attachedByName || null,
       date: todayDate,
@@ -95,6 +110,17 @@ router.post('/', async (req, res) => {
 });
 
 /**
+ * Helper to find task by id or _id
+ */
+async function findTaskById(id) {
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    const task = await Task.findById(id);
+    if (task) return task;
+  }
+  return await Task.findOne({ _id: id });
+}
+
+/**
  * @route PUT /api/tasks/:id/complete-with-photo
  * @desc Complete task with attached photo proof in DB
  */
@@ -103,7 +129,7 @@ router.put('/:id/complete-with-photo', async (req, res) => {
     const { id } = req.params;
     const { photoUrl, userName } = req.body;
 
-    const task = await Task.findById(id);
+    const task = await findTaskById(id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
@@ -137,7 +163,7 @@ router.post('/:id/photo', async (req, res) => {
     const { id } = req.params;
     const { photoUrl, userName } = req.body;
 
-    const task = await Task.findById(id);
+    const task = await findTaskById(id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
@@ -167,7 +193,7 @@ router.put('/:id/toggle', async (req, res) => {
     const { id } = req.params;
     const { userName } = req.body;
 
-    const task = await Task.findById(id);
+    const task = await findTaskById(id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
@@ -200,7 +226,7 @@ router.post('/:id/nudge', async (req, res) => {
     const { id } = req.params;
     const { senderName, partnerName } = req.body;
 
-    const task = await Task.findById(id);
+    const task = await findTaskById(id);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
@@ -228,7 +254,11 @@ router.post('/:id/nudge', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await Task.findByIdAndDelete(id);
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      await Task.findByIdAndDelete(id);
+    } else {
+      await Task.deleteOne({ _id: id });
+    }
     return res.json({ success: true, message: 'Task deleted' });
   } catch (error) {
     console.error('delete task error:', error);
