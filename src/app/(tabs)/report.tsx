@@ -564,12 +564,17 @@ export default function ReportScreen() {
           displayTasks.map((task) => {
             const isDone = task.isCompleted;
             const taskColor = CATEGORY_COLORS[task.category] || colors.primary;
-            const assignedLabel =
-              task.assignedTo === 'both'
-                ? 'Both Partners'
-                : task.assignedTo === 'partner'
-                ? partner?.name || 'Partner'
-                : user?.name || 'You';
+            const isCreator =
+              (user?.id && String(task.creatorId) === String(user.id)) ||
+              (user?.email && String(task.creatorId).toLowerCase() === user.email.toLowerCase()) ||
+              (!task.creatorId && true);
+
+            let assignedLabel = 'Both Partners';
+            if (task.assignedTo === 'partner') {
+              assignedLabel = isCreator ? (partner?.name ? `For ${partner.name}` : 'For Partner') : 'For You';
+            } else if (task.assignedTo === 'me') {
+              assignedLabel = isCreator ? 'For You' : (task.creatorName ? `For ${task.creatorName}` : partner?.name ? `For ${partner.name}` : 'For Partner');
+            }
 
             return (
               <Card

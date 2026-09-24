@@ -54,7 +54,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
     deleteTask,
     nudgePartner,
   } = useTasks();
-  const { partner } = useAuth();
+  const { user, partner } = useAuth();
 
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
@@ -81,8 +81,41 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
     setAlertModal({ visible: true, title, message, type });
   };
 
-  const isAssignedToPartner = task.assignedTo === 'partner';
-  const canUserComplete = !isAssignedToPartner;
+  const isCreator =
+    (user?.id && String(task.creatorId) === String(user.id)) ||
+    (user?.email && String(task.creatorId).toLowerCase() === user.email.toLowerCase()) ||
+    (!task.creatorId && true);
+
+  // Determine who the task is assigned to from the current logged-in user's perspective:
+  let isAssignedToPartner = false;
+  let assigneeLabel = 'Both of us';
+
+  if (task.assignedTo === 'both') {
+    isAssignedToPartner = false;
+    assigneeLabel = 'Both of us';
+  } else if (task.assignedTo === 'partner') {
+    if (isCreator) {
+      // Creator assigned it to partner -> Logged-in user is waiting for partner
+      isAssignedToPartner = true;
+      assigneeLabel = partner?.name ? `For ${partner.name}` : 'For Partner';
+    } else {
+      // Logged-in user is the partner -> Task is assigned to ME!
+      isAssignedToPartner = false;
+      assigneeLabel = 'For Me';
+    }
+  } else if (task.assignedTo === 'me') {
+    if (isCreator) {
+      // Creator assigned it to themselves -> Logged-in user is the creator
+      isAssignedToPartner = false;
+      assigneeLabel = 'For Me';
+    } else {
+      // Logged-in user is the partner -> Task is assigned to creator (partner)
+      isAssignedToPartner = true;
+      assigneeLabel = task.creatorName ? `For ${task.creatorName}` : partner?.name ? `For ${partner.name}` : 'For Partner';
+    }
+  }
+
+  const getAssigneeLabel = () => assigneeLabel;
 
   const handlePickImage = async () => {
     try {
@@ -198,11 +231,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
     }
   };
 
-  const getAssigneeLabel = () => {
-    if (task.assignedTo === 'both') return 'Both of us';
-    if (task.assignedTo === 'partner') return partner?.name || 'Partner';
-    return 'For Me';
-  };
 
   const formatAttachedTimestamp = (dateString?: string) => {
     const rawDate = dateString || (task as any).updatedAt || task.createdAt;

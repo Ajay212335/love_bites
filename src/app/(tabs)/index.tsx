@@ -58,7 +58,17 @@ export default function HomeScreen() {
 
   const filteredTasks = tasks.filter((t) => {
     if (filter === 'completed') return t.isCompleted;
-    if (filter === 'partner') return t.assignedTo === 'partner' || t.assignedTo === 'both';
+    if (filter === 'partner') {
+      const isCreator =
+        (user?.id && String(t.creatorId) === String(user.id)) ||
+        (user?.email && String(t.creatorId).toLowerCase() === user.email.toLowerCase()) ||
+        (!t.creatorId && true);
+
+      if (t.assignedTo === 'both') return true;
+      if (t.assignedTo === 'partner') return isCreator;
+      if (t.assignedTo === 'me') return !isCreator;
+      return false;
+    }
     return true;
   });
 
